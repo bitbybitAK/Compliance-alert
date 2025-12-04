@@ -1,21 +1,139 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, Download, AlertTriangle, Clock, TrendingUp, 
-  BarChart3, ChevronDown, SortAsc, SortDesc 
+  BarChart3, ChevronDown, SortAsc, SortDesc, Settings, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { ComplianceAlert, Severity, Status } from './types';
 import { generateMockAlerts } from './mockData';
 import AlertDetailModal from './components/AlertDetailModal';
+import SettingsModal from './components/SettingsModal';
+import { fetchMultipleStocks, fetchIntradayData, StockData } from './services/alphaVantage';
+import { generateAlertsFromStockData } from './services/alertGenerator';
 import toast from 'react-hot-toast';
 
+const STOCK_SYMBOLS = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN'];
+const REFRESH_INTERVAL = 60000; // 60 seconds
+
 function App() {
-  const [alerts, setAlerts] = useState<ComplianceAlert[]>(generateMockAlerts());
+  const [apiKey, setApiKey] = useState<string>(() => {
+    return localStorage.getItem('alphaVantageApiKey') || '';
+  });
+  const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
+  const [isUsingRealData, setIsUsingRealData] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<ComplianceAlert | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<Severity | 'All'>('All');
   const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All');
   const [sortBy, setSortBy] = useState<'time' | 'severity'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  const previousDataRef = useRef<Map<string, StockData>>(new Map());
+  const intradayDataRef = useRef<Map<string, { price: number; volume: number; timestamp: string }[]>>(new Map());
+
+  // Initialize with mock data if no API key
+  useEffect(() => {
+    if (!apiKey) {
+      setAlerts(generateMockAlerts());
+      setIsUsingRealData(false);
+    }
+  }, [apiKey]);
+
+  // Fetch real data when API key is available
+  const fetchRealData = useCallback(async () => {
+    if (!apiKey) return;
+
+    setIsRefreshing(true);
+    try {
+      // Fetch current stock quotes
+      const stockData = await fetchMultipleStocks(apiKey, STOCK_SYMBOLS);
+      
+      if (stockData.length === 0) {
+        toast.error('Failed to fetch stock data. Using demo data.');
+        setAlerts(generateMockAlerts());
+        setIsUsingRealData(false);
+        setIsRefreshing(false);
+        return;
+      }
+
+      // We'll fetch intraday data for first stock only to avoid rate limits
+      if (stockData.length > 0) {
+        const intraday = await fetchIntradayData(apiKey, stockData[0].symbol);
+        if (intraday.length > 0) {
+          intradayDataRef.current.set(stockData[0].symbol, intraday);
+        }
+      }
+
+      // Generate alerts from stock data
+      const newAlerts = generateAlertsFromStockData(
+        stockData,
+        previousDataRef.current,
+        intradayDataRef.current
+      );
+
+      // Update previous data for next comparison
+      stockData.forEach(stock => {
+        previousDataRef.current.set(stock.symbol, stock);
+      });
+
+      // Merge with existing alerts (keep old alerts, add new ones)
+      setAlerts(prev => {
+        const existingIds = new Set(prev.map(a => a.id));
+        const newUniqueAlerts = newAlerts.filter(a => !existingIds.has(a.id));
+        return [...prev, ...newUniqueAlerts].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+      });
+
+      setIsUsingRealData(true);
+      setLastUpdated(new Date());
+      toast.success(`Updated ${stockData.length} stocks, generated ${newAlerts.length} alerts`);
+    } catch (error) {
+      console.error('Error fetching real data:', error);
+      toast.error('Error fetching market data. Using demo data.');
+      setAlerts(generateMockAlerts());
+      setIsUsingRealData(false);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [apiKey]);
+
+  // Auto-refresh every 60 seconds when using real data
+  useEffect(() => {
+    if (!apiKey) return;
+
+    // Initial fetch
+    fetchRealData();
+
+    // Set up interval
+    const interval = setInterval(() => {
+      fetchRealData();
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [apiKey, fetchRealData]);
+
+  const handleApiKeySet = (key: string) => {
+    setApiKey(key);
+    if (key) {
+      fetchRealData();
+    } else {
+      setAlerts(generateMockAlerts());
+      setIsUsingRealData(false);
+      previousDataRef.current.clear();
+      intradayDataRef.current.clear();
+    }
+  };
+
+  const handleManualRefresh = () => {
+    if (apiKey) {
+      fetchRealData();
+    } else {
+      toast('Add API key to fetch live market data', { icon: 'ℹ️' });
+    }
+  };
 
   const filteredAndSortedAlerts = useMemo(() => {
     let filtered = alerts.filter(alert => {
@@ -58,7 +176,6 @@ function App() {
       ? Math.round((alerts.filter(a => a.status === 'Dismissed').length / totalAlerts) * 100)
       : 0;
     
-    // Calculate average investigation time (simulated)
     const investigatedAlerts = alerts.filter(a => 
       a.status === 'Resolved' || a.status === 'Dismissed' || a.status === 'Escalated'
     );
@@ -68,7 +185,7 @@ function App() {
             if (alert.timeline.length > 1) {
               const start = new Date(alert.timeline[0].timestamp).getTime();
               const end = new Date(alert.timeline[alert.timeline.length - 1].timestamp).getTime();
-              return sum + (end - start) / (1000 * 60 * 60); // hours
+              return sum + (end - start) / (1000 * 60 * 60);
             }
             return sum;
           }, 0) / investigatedAlerts.length
@@ -120,23 +237,98 @@ function App() {
     }
   };
 
+  const getTimeAgo = (date: Date | null) => {
+    if (!date) return 'Never';
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return `${seconds} seconds ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minutes ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hours ago`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* API Key Banner */}
+      {!apiKey && (
+        <div className="bg-blue-600 text-white py-3 px-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4" />
+              <span className="text-sm">
+                Get your free API key at{' '}
+                <a
+                  href="https://www.alphavantage.co/support/#api-key"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-semibold hover:text-blue-200"
+                >
+                  alphavantage.co
+                </a>
+                {' '}(takes 30 seconds, no credit card)
+              </span>
+            </div>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="text-sm underline hover:text-blue-200"
+            >
+              Add API Key →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Demo Data Banner */}
+      {!isUsingRealData && apiKey && (
+        <div className="bg-yellow-50 border-b border-yellow-200 py-2 px-4">
+          <div className="max-w-7xl mx-auto text-sm text-yellow-800">
+            Using demo data - add API key for live market data
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900">Compliance Alert Triage System</h1>
-              <p className="text-sm text-gray-500 mt-1">Eventus Systems - Regulatory Technology Platform</p>
+              <div className="flex items-center gap-4 mt-1">
+                <p className="text-sm text-gray-500">Eventus Systems - Regulatory Technology Platform</p>
+                {isUsingRealData && lastUpdated && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Clock className="w-4 h-4" />
+                    <span>Last updated: {getTimeAgo(lastUpdated)}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Download className="w-4 h-4" />
-              Export JSON
-            </button>
+            <div className="flex items-center gap-3">
+              {isUsingRealData && (
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              )}
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Download className="w-4 h-4" />
+                Export JSON
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -326,6 +518,13 @@ function App() {
         )}
       </main>
 
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onApiKeySet={handleApiKeySet}
+      />
+
       {/* Alert Detail Modal */}
       {selectedAlert && (
         <AlertDetailModal
@@ -339,4 +538,3 @@ function App() {
 }
 
 export default App;
-

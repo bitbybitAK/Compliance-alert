@@ -71,29 +71,31 @@ export default function SettingsModal({ isOpen, onClose, onApiKeySet }: Settings
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-md w-full"
+        className="glass rounded-2xl shadow-2xl max-w-md w-full animate-slide-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <Key className="w-6 h-6 text-blue-600" />
-            <h2 className="text-2xl font-bold text-gray-900">API Settings</h2>
+            <div className="p-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg">
+              <Key className="w-6 h-6 text-blue-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-white">API Settings</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-white/10 rounded-xl transition-colors"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-5 h-5 text-white/70" />
           </button>
         </div>
 
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-white/80 mb-2">
               Alpha Vantage API Key
             </label>
             <input
@@ -101,15 +103,15 @@ export default function SettingsModal({ isOpen, onClose, onApiKeySet }: Settings
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Enter your API key"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="input-modern"
             />
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-white/60">
               Get your free API key at{' '}
               <a
                 href="https://www.alphavantage.co/support/#api-key"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="text-blue-400 hover:text-blue-300 underline font-medium transition-colors"
               >
                 alphavantage.co
               </a>
@@ -117,19 +119,19 @@ export default function SettingsModal({ isOpen, onClose, onApiKeySet }: Settings
             </p>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> The free tier allows 5 API calls per minute. 
+          <div className="bg-blue-500/20 border border-blue-400/30 rounded-xl p-4 backdrop-blur-sm">
+            <p className="text-sm text-blue-200">
+              <strong className="font-semibold">Note:</strong> The free tier allows 5 API calls per minute. 
               The app will automatically manage rate limits.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t border-gray-200">
+        <div className="flex items-center justify-between p-6 border-t border-white/10">
           {apiKey && (
             <button
               onClick={handleRemove}
-              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+              className="px-4 py-2 text-red-400 hover:bg-red-500/20 rounded-xl transition-colors font-semibold"
             >
               Remove API Key
             </button>
@@ -137,14 +139,14 @@ export default function SettingsModal({ isOpen, onClose, onApiKeySet }: Settings
           <div className="flex gap-3 ml-auto">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isLoading || !apiKey.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
               {isLoading ? 'Saving...' : 'Save'}

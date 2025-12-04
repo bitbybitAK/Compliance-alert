@@ -172,25 +172,32 @@ function App() {
   const metrics = useMemo(() => {
     const totalAlerts = alerts.length;
     const pendingReview = alerts.filter(a => a.status === 'New' || a.status === 'In Review').length;
-    const falsePositiveRate = totalAlerts > 0 
-      ? Math.round((alerts.filter(a => a.status === 'Dismissed').length / totalAlerts) * 100)
-      : 0;
     
-    const investigatedAlerts = alerts.filter(a => 
-      a.status === 'Resolved' || a.status === 'Dismissed' || a.status === 'Escalated'
+    // False Positive Rate: (Dismissed alerts / Total processed alerts) × 100
+    // Total processed = Resolved + Dismissed (alerts that have been processed)
+    const processedAlerts = alerts.filter(a => 
+      a.status === 'Resolved' || a.status === 'Dismissed'
     );
-    const avgInvestigationTime = investigatedAlerts.length > 0
+    const dismissedAlerts = alerts.filter(a => a.status === 'Dismissed').length;
+    const falsePositiveRate = processedAlerts.length > 0
+      ? Math.round((dismissedAlerts / processedAlerts.length) * 100)
+      : null;
+    
+    // Average Investigation Time: Time from creation to resolution in minutes
+    // Only for resolved alerts (not dismissed)
+    const resolvedAlerts = alerts.filter(a => a.status === 'Resolved');
+    const avgInvestigationTime = resolvedAlerts.length > 0
       ? Math.round(
-          investigatedAlerts.reduce((sum, alert) => {
-            if (alert.timeline.length > 1) {
+          resolvedAlerts.reduce((sum, alert) => {
+            if (alert.timeline.length >= 2) {
               const start = new Date(alert.timeline[0].timestamp).getTime();
               const end = new Date(alert.timeline[alert.timeline.length - 1].timestamp).getTime();
-              return sum + (end - start) / (1000 * 60 * 60);
+              return sum + (end - start) / (1000 * 60); // Convert to minutes
             }
             return sum;
-          }, 0) / investigatedAlerts.length
+          }, 0) / resolvedAlerts.length
         )
-      : 0;
+      : null;
 
     return {
       totalAlerts,
@@ -220,20 +227,20 @@ function App() {
 
   const getSeverityColor = (severity: Severity) => {
     switch (severity) {
-      case 'Critical': return 'bg-red-100 text-red-800 border-red-300';
-      case 'High': return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Low': return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'Critical': return 'badge-critical';
+      case 'High': return 'badge-high';
+      case 'Medium': return 'badge-medium';
+      case 'Low': return 'badge-low';
     }
   };
 
   const getStatusColor = (status: Status) => {
     switch (status) {
-      case 'New': return 'bg-blue-100 text-blue-800';
-      case 'In Review': return 'bg-yellow-100 text-yellow-800';
-      case 'Escalated': return 'bg-red-100 text-red-800';
-      case 'Dismissed': return 'bg-gray-100 text-gray-800';
-      case 'Resolved': return 'bg-green-100 text-green-800';
+      case 'New': return 'status-new';
+      case 'In Review': return 'status-review';
+      case 'Escalated': return 'status-escalated';
+      case 'Dismissed': return 'status-dismissed';
+      case 'Resolved': return 'status-resolved';
     }
   };
 
@@ -248,20 +255,20 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* API Key Banner */}
       {!apiKey && (
-        <div className="bg-blue-600 text-white py-3 px-4">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 shadow-lg">
           <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <ExternalLink className="w-4 h-4" />
-              <span className="text-sm">
+              <span className="text-sm font-medium">
                 Get your free API key at{' '}
                 <a
                   href="https://www.alphavantage.co/support/#api-key"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline font-semibold hover:text-blue-200"
+                  className="underline font-semibold hover:text-blue-200 transition-colors"
                 >
                   alphavantage.co
                 </a>
@@ -270,7 +277,7 @@ function App() {
             </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="text-sm underline hover:text-blue-200"
+              className="text-sm font-semibold underline hover:text-blue-200 transition-colors"
             >
               Add API Key →
             </button>
@@ -280,53 +287,52 @@ function App() {
 
       {/* Demo Data Banner */}
       {!isUsingRealData && apiKey && (
-        <div className="bg-yellow-50 border-b border-yellow-200 py-2 px-4">
-          <div className="max-w-7xl mx-auto text-sm text-yellow-800">
+        <div className="bg-yellow-500/20 backdrop-blur-sm border-b border-yellow-400/30 py-2 px-4">
+          <div className="max-w-7xl mx-auto text-sm text-yellow-200 font-medium">
             Using demo data - add API key for live market data
           </div>
         </div>
       )}
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="glass border-b border-white/10 shadow-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">Compliance Alert Triage System</h1>
-              <div className="flex items-center gap-4 mt-1">
-                <p className="text-sm text-gray-500">Eventus Systems - Regulatory Technology Platform</p>
-                {isUsingRealData && lastUpdated && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Clock className="w-4 h-4" />
-                    <span>Last updated: {getTimeAgo(lastUpdated)}</span>
-                  </div>
-                )}
-              </div>
+              <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
+                Compliance Alert Triage System
+              </h1>
+              {isUsingRealData && lastUpdated && (
+                <div className="flex items-center gap-2 text-sm text-white/70">
+                  <Clock className="w-4 h-4" />
+                  <span>Last updated: {getTimeAgo(lastUpdated)}</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {isUsingRealData && (
                 <button
                   onClick={handleManualRefresh}
                   disabled={isRefreshing}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
               )}
               <button
                 onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="btn-secondary"
               >
                 <Settings className="w-4 h-4" />
-                Settings
+                <span className="hidden sm:inline">Settings</span>
               </button>
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                className="btn-primary"
               >
                 <Download className="w-4 h-4" />
-                Export JSON
+                <span className="hidden sm:inline">Export</span>
               </button>
             </div>
           </div>
@@ -336,54 +342,58 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Metrics Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Total Alerts</h3>
-              <BarChart3 className="w-5 h-5 text-gray-400" />
+          <div className="metric-card animate-slide-in">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide">Total Alerts</h3>
+              <BarChart3 className="w-5 h-5 text-blue-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{metrics.totalAlerts}</p>
-            <p className="text-xs text-gray-500 mt-1">All time alerts</p>
+            <p className="text-4xl font-bold text-white mb-1">{metrics.totalAlerts}</p>
+            <p className="text-xs text-white/50">All time alerts</p>
           </div>
 
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Pending Review</h3>
+          <div className="metric-card animate-slide-in" style={{ animationDelay: '0.1s' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide">Pending Review</h3>
               <Clock className="w-5 h-5 text-orange-400" />
             </div>
-            <p className="text-3xl font-bold text-orange-600">{metrics.pendingReview}</p>
-            <p className="text-xs text-gray-500 mt-1">Requires attention</p>
+            <p className="text-4xl font-bold text-white mb-1">{metrics.pendingReview}</p>
+            <p className="text-xs text-white/50">Requires attention</p>
           </div>
 
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">False Positive Rate</h3>
-              <TrendingUp className="w-5 h-5 text-blue-400" />
+          <div className="metric-card animate-slide-in" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide">False Positive Rate</h3>
+              <TrendingUp className="w-5 h-5 text-purple-400" />
             </div>
-            <p className="text-3xl font-bold text-blue-600">{metrics.falsePositiveRate}%</p>
-            <p className="text-xs text-gray-500 mt-1">Dismissed alerts</p>
+            <p className="text-4xl font-bold text-white mb-1">
+              {metrics.falsePositiveRate !== null ? `${metrics.falsePositiveRate}%` : '---%'}
+            </p>
+            <p className="text-xs text-white/50">Dismissed / Processed</p>
           </div>
 
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Avg Investigation Time</h3>
-              <Clock className="w-5 h-5 text-green-400" />
+          <div className="metric-card animate-slide-in" style={{ animationDelay: '0.3s' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide">Avg Investigation Time</h3>
+              <Clock className="w-5 h-5 text-teal-400" />
             </div>
-            <p className="text-3xl font-bold text-green-600">{metrics.avgInvestigationTime}h</p>
-            <p className="text-xs text-gray-500 mt-1">Average resolution time</p>
+            <p className="text-4xl font-bold text-white mb-1">
+              {metrics.avgInvestigationTime !== null ? `${metrics.avgInvestigationTime} min` : '-- min'}
+            </p>
+            <p className="text-xs text-white/50">Resolution time</p>
           </div>
         </div>
 
         {/* Filters and Search */}
-        <div className="card p-6 mb-6">
+        <div className="card p-6 mb-6 animate-fade-in">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
               <input
                 type="text"
                 placeholder="Search by alert ID, trader name, or trader ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="input-modern pl-12"
               />
             </div>
 
@@ -391,31 +401,31 @@ function App() {
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value as Severity | 'All')}
-                className="appearance-none pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white cursor-pointer"
+                className="select-modern pr-10"
               >
-                <option value="All">All Severities</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                <option value="All" className="bg-slate-900">All Severities</option>
+                <option value="Critical" className="bg-slate-900">Critical</option>
+                <option value="High" className="bg-slate-900">High</option>
+                <option value="Medium" className="bg-slate-900">Medium</option>
+                <option value="Low" className="bg-slate-900">Low</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
             </div>
 
             <div className="relative">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as Status | 'All')}
-                className="appearance-none pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white cursor-pointer"
+                className="select-modern pr-10"
               >
-                <option value="All">All Statuses</option>
-                <option value="New">New</option>
-                <option value="In Review">In Review</option>
-                <option value="Escalated">Escalated</option>
-                <option value="Dismissed">Dismissed</option>
-                <option value="Resolved">Resolved</option>
+                <option value="All" className="bg-slate-900">All Statuses</option>
+                <option value="New" className="bg-slate-900">New</option>
+                <option value="In Review" className="bg-slate-900">In Review</option>
+                <option value="Escalated" className="bg-slate-900">Escalated</option>
+                <option value="Dismissed" className="bg-slate-900">Dismissed</option>
+                <option value="Resolved" className="bg-slate-900">Resolved</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
             </div>
 
             <div className="flex gap-2">
@@ -428,10 +438,10 @@ function App() {
                     setSortOrder('desc');
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all ${
                   sortBy === 'time' 
-                    ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-blue-400/50' 
+                    : 'bg-white/10 text-white/70 border border-white/20 hover:bg-white/20'
                 }`}
               >
                 {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
@@ -446,10 +456,10 @@ function App() {
                     setSortOrder('desc');
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all ${
                   sortBy === 'severity' 
-                    ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-blue-400/50' 
+                    : 'bg-white/10 text-white/70 border border-white/20 hover:bg-white/20'
                 }`}
               >
                 {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
@@ -461,41 +471,42 @@ function App() {
 
         {/* Alerts Grid */}
         {filteredAndSortedAlerts.length === 0 ? (
-          <div className="card p-12 text-center">
-            <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No alerts found</h3>
-            <p className="text-gray-500">Try adjusting your filters or search query</p>
+          <div className="card p-12 text-center animate-fade-in">
+            <AlertTriangle className="w-16 h-16 text-white/30 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">No alerts found</h3>
+            <p className="text-white/60">Try adjusting your filters or search query</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAndSortedAlerts.map((alert) => (
+            {filteredAndSortedAlerts.map((alert, index) => (
               <div
                 key={alert.id}
                 onClick={() => setSelectedAlert(alert)}
-                className="card card-hover p-6"
+                className="card card-hover p-6 animate-slide-in"
+                style={{ animationDelay: `${index * 0.05}s` }}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{alert.id}</h3>
-                    <p className="text-sm text-gray-500">{alert.type}</p>
+                    <h3 className="text-lg font-bold text-white mb-1">{alert.id}</h3>
+                    <p className="text-sm text-white/60">{alert.type}</p>
                   </div>
-                  <div className={`px-2 py-1 rounded text-xs font-semibold border ${getSeverityColor(alert.severity)}`}>
+                  <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${getSeverityColor(alert.severity)}`}>
                     {alert.severity}
                   </div>
                 </div>
 
-                <div className="space-y-2 mb-4">
+                <div className="space-y-2.5 mb-4">
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-500">Trader:</span>
-                    <span className="font-medium text-gray-900">{alert.trader.name}</span>
+                    <span className="text-white/50">Trader:</span>
+                    <span className="font-semibold text-white">{alert.trader.name}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-500">Firm:</span>
-                    <span className="text-gray-900">{alert.trader.firm}</span>
+                    <span className="text-white/50">Firm:</span>
+                    <span className="text-white/80">{alert.trader.firm}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-500">
+                    <Clock className="w-4 h-4 text-white/40" />
+                    <span className="text-white/60">
                       {new Date(alert.timestamp).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -506,11 +517,11 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(alert.status)}`}>
+                <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                  <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${getStatusColor(alert.status)}`}>
                     {alert.status}
                   </span>
-                  <p className="text-xs text-gray-500">{alert.trader.id}</p>
+                  <p className="text-xs text-white/40">{alert.trader.id}</p>
                 </div>
               </div>
             ))}

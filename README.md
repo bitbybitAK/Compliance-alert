@@ -1,6 +1,6 @@
 # Compliance Alert Triage System
 
-A professional, production-ready compliance alert management system built for RegTech companies like Eventus Systems. This application provides a comprehensive interface for triaging, investigating, and managing compliance alerts in real-time.
+A professional, production-ready compliance alert management system built for RegTech companies . This application provides a comprehensive interface for triaging, investigating, and managing compliance alerts in real-time.
 
 ## Features
 

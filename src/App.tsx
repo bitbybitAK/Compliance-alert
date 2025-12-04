@@ -54,7 +54,6 @@ function App() {
   const metrics = useMemo(() => {
     const totalAlerts = alerts.length;
     const pendingReview = alerts.filter(a => a.status === 'New' || a.status === 'In Review').length;
-    const resolved = alerts.filter(a => a.status === 'Resolved' || a.status === 'Dismissed').length;
     const falsePositiveRate = totalAlerts > 0 
       ? Math.round((alerts.filter(a => a.status === 'Dismissed').length / totalAlerts) * 100)
       : 0;

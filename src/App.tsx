@@ -137,13 +137,21 @@ function App() {
 
   const filteredAndSortedAlerts = useMemo(() => {
     let filtered = alerts.filter(alert => {
+      // Search filter
       const matchesSearch = 
         alert.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         alert.trader.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         alert.trader.id.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesSeverity = severityFilter === 'All' || alert.severity === severityFilter;
-      const matchesStatus = statusFilter === 'All' || alert.status === statusFilter;
+      // Severity filter - exact string match
+      const matchesSeverity = severityFilter === 'All' 
+        ? true 
+        : alert.severity.trim() === severityFilter.trim();
+      
+      // Status filter - exact string match
+      const matchesStatus = statusFilter === 'All' 
+        ? true 
+        : alert.status.trim() === statusFilter.trim();
       
       return matchesSearch && matchesSeverity && matchesStatus;
     });
@@ -174,26 +182,41 @@ function App() {
     const pendingReview = alerts.filter(a => a.status === 'New' || a.status === 'In Review').length;
     
     // False Positive Rate: (Dismissed alerts / Total processed alerts) × 100
-    // Total processed = Resolved + Dismissed (alerts that have been processed)
-    const processedAlerts = alerts.filter(a => 
-      a.status === 'Resolved' || a.status === 'Dismissed'
-    );
+    // Processed alerts = all alerts that are NOT "New" (i.e., have been processed)
+    const processedAlerts = alerts.filter(a => a.status !== 'New');
     const dismissedAlerts = alerts.filter(a => a.status === 'Dismissed').length;
     const falsePositiveRate = processedAlerts.length > 0
-      ? Math.round((dismissedAlerts / processedAlerts.length) * 100)
+      ? parseFloat(((dismissedAlerts / processedAlerts.length) * 100).toFixed(1))
       : null;
     
     // Average Investigation Time: Time from creation to resolution in minutes
     // Only for resolved alerts (not dismissed)
+    // Calculation: (resolution timestamp - creation timestamp) in minutes
     const resolvedAlerts = alerts.filter(a => a.status === 'Resolved');
     const avgInvestigationTime = resolvedAlerts.length > 0
       ? Math.round(
           resolvedAlerts.reduce((sum, alert) => {
-            if (alert.timeline.length >= 2) {
-              const start = new Date(alert.timeline[0].timestamp).getTime();
-              const end = new Date(alert.timeline[alert.timeline.length - 1].timestamp).getTime();
-              return sum + (end - start) / (1000 * 60); // Convert to minutes
+            // Creation timestamp is the alert's original timestamp
+            const creationTime = new Date(alert.timestamp).getTime();
+            
+            // Resolution timestamp is the timestamp of the "Resolved" or "Mark Resolved" action in timeline
+            const resolutionEvent = alert.timeline.find(event => 
+              event.action === 'Resolved' || event.action === 'Mark Resolved'
+            );
+            
+            if (resolutionEvent) {
+              const resolutionTime = new Date(resolutionEvent.timestamp).getTime();
+              const timeDiffMinutes = (resolutionTime - creationTime) / (1000 * 60);
+              return sum + timeDiffMinutes;
             }
+            
+            // Fallback: if no resolution event found, use last timeline event
+            if (alert.timeline.length > 0) {
+              const lastEventTime = new Date(alert.timeline[alert.timeline.length - 1].timestamp).getTime();
+              const timeDiffMinutes = (lastEventTime - creationTime) / (1000 * 60);
+              return sum + timeDiffMinutes;
+            }
+            
             return sum;
           }, 0) / resolvedAlerts.length
         )
@@ -366,7 +389,7 @@ function App() {
               <TrendingUp className="w-5 h-5 text-purple-400" />
             </div>
             <p className="text-4xl font-bold text-white mb-1">
-              {metrics.falsePositiveRate !== null ? `${metrics.falsePositiveRate}%` : '---%'}
+              {metrics.falsePositiveRate !== null ? `${metrics.falsePositiveRate.toFixed(1)}%` : '---%'}
             </p>
             <p className="text-xs text-white/50">Dismissed / Processed</p>
           </div>
@@ -400,7 +423,12 @@ function App() {
             <div className="relative">
               <select
                 value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value as Severity | 'All')}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'All' || value === 'Critical' || value === 'High' || value === 'Medium' || value === 'Low') {
+                    setSeverityFilter(value as Severity | 'All');
+                  }
+                }}
                 className="select-modern pr-10"
               >
                 <option value="All" className="bg-slate-900">All Severities</option>

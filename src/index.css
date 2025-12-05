@@ -5,17 +5,28 @@
 @layer base {
   * {
     @apply font-sans;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   }
   
   body {
     @apply bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-gray-50;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    font-weight: 400; /* Regular for body text */
     min-height: 100vh;
     background-attachment: fixed;
   }
   
+  /* Default body text - 400 (regular) */
+  /* Tailwind classes (font-medium, font-semibold, font-bold) will override this */
+  
+  /* Headings default to bold (700) - can be overridden with Tailwind classes */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold;
+    font-weight: 700;
+  }
+  
+  /* Labels default to medium (500) - can be overridden with Tailwind classes */
+  label {
+    font-weight: 500;
   }
 }
 
@@ -55,13 +66,15 @@
   }
   
   .btn-primary {
-    @apply px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold;
+    @apply px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl;
+    font-weight: 600; /* Semibold for buttons */
     @apply hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 active:scale-95;
     @apply transition-all duration-200 shadow-lg hover:shadow-xl;
   }
   
   .btn-secondary {
-    @apply px-6 py-2.5 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold border border-white/20;
+    @apply px-6 py-2.5 bg-white/10 backdrop-blur-sm text-white rounded-xl border border-white/20;
+    font-weight: 600; /* Semibold for buttons */
     @apply hover:bg-white/20 hover:border-white/30 transform hover:scale-105 active:scale-95;
     @apply transition-all duration-200;
   }

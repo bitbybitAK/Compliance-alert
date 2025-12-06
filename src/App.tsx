@@ -136,45 +136,49 @@ function App() {
   };
 
   const filteredAndSortedAlerts = useMemo(() => {
-    let filtered = alerts.filter(alert => {
-      // Search filter
-      const matchesSearch = 
-        alert.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        alert.trader.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        alert.trader.id.toLowerCase().includes(searchQuery.toLowerCase());
+    // STEP 1: Filter alerts based on search, severity, and status
+    const filtered = alerts.filter(alert => {
+      // Search filter - check alert ID, trader name, or trader ID
+      const searchLower = searchQuery.toLowerCase().trim();
+      const matchesSearch = searchLower === '' ||
+        alert.id.toLowerCase().includes(searchLower) ||
+        alert.trader.name.toLowerCase().includes(searchLower) ||
+        alert.trader.id.toLowerCase().includes(searchLower);
       
-      // Severity filter - exact string match
-      const matchesSeverity = severityFilter === 'All' 
-        ? true 
-        : alert.severity.trim() === severityFilter.trim();
+      // Severity filter - exact string match (no trimming needed, values are clean)
+      const matchesSeverity = severityFilter === 'All' || alert.severity === severityFilter;
       
-      // Status filter - exact string match
-      const matchesStatus = statusFilter === 'All' 
-        ? true 
-        : alert.status.trim() === statusFilter.trim();
+      // Status filter - exact string match (no trimming needed, values are clean)
+      const matchesStatus = statusFilter === 'All' || alert.status === statusFilter;
       
       return matchesSearch && matchesSeverity && matchesStatus;
     });
 
-    filtered.sort((a, b) => {
+    // STEP 2: Sort the filtered results
+    const sorted = [...filtered].sort((a, b) => {
       if (sortBy === 'time') {
         const timeA = new Date(a.timestamp).getTime();
         const timeB = new Date(b.timestamp).getTime();
+        // Handle invalid dates
+        if (isNaN(timeA) && isNaN(timeB)) return 0;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
         return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
       } else {
+        // Sort by severity
         const severityOrder: Record<Severity, number> = {
           'Critical': 4,
           'High': 3,
           'Medium': 2,
           'Low': 1,
         };
-        const orderA = severityOrder[a.severity];
-        const orderB = severityOrder[b.severity];
+        const orderA = severityOrder[a.severity] || 0;
+        const orderB = severityOrder[b.severity] || 0;
         return sortOrder === 'asc' ? orderA - orderB : orderB - orderA;
       }
     });
 
-    return filtered;
+    return sorted;
   }, [alerts, searchQuery, severityFilter, statusFilter, sortBy, sortOrder]);
 
   const metrics = useMemo(() => {
@@ -231,9 +235,19 @@ function App() {
   }, [alerts]);
 
   const handleUpdateAlert = (alertId: string, updates: Partial<ComplianceAlert>) => {
-    setAlerts(prev => prev.map(alert => 
-      alert.id === alertId ? { ...alert, ...updates } : alert
-    ));
+    setAlerts(prev => {
+      // Create a new array with updated alert to ensure React detects the change
+      const updated = prev.map(alert => 
+        alert.id === alertId ? { ...alert, ...updates } : alert
+      );
+      // Return new array reference to trigger re-render
+      return updated;
+    });
+    
+    // If the selected alert was updated, update it in the modal too
+    if (selectedAlert && selectedAlert.id === alertId) {
+      setSelectedAlert(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   const handleExport = () => {
@@ -424,10 +438,8 @@ function App() {
               <select
                 value={severityFilter}
                 onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === 'All' || value === 'Critical' || value === 'High' || value === 'Medium' || value === 'Low') {
-                    setSeverityFilter(value as Severity | 'All');
-                  }
+                  // Direct assignment - values are already validated by the select options
+                  setSeverityFilter(e.target.value as Severity | 'All');
                 }}
                 className="select-modern pr-10"
               >
